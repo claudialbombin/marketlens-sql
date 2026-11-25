@@ -19,6 +19,72 @@
       <p class="meta-line" id="snapshot">Loading data…</p>
     </header>
 
+    <section id="basics" aria-labelledby="basics-title">
+      <h2 id="basics-title">Before you start</h2>
+      <p class="section-intro">
+        No finance background is needed to read this page. These are the seven assets and the
+        four ideas behind every chart.
+      </p>
+
+      <div class="panel">
+        <h3>The assets</h3>
+        <ul class="asset-list">
+          <li>
+            <strong>S&amp;P 500</strong>: an index of the 500 largest US companies, often
+            used as shorthand for “the market”. It is drawn in a neutral colour (black, or white in
+            dark mode) and serves as the benchmark the other assets are compared with.
+          </li>
+          <li>
+            <strong>Four US companies from different sectors</strong>: Apple (AAPL,
+            technology), JPMorgan Chase (JPM, banking), Exxon Mobil (XOM, oil and gas) and
+            Johnson &amp; Johnson (JNJ, healthcare).
+          </li>
+          <li>
+            <strong>Two cryptocurrencies</strong>: Bitcoin (BTC-USD) and Ether (ETH-USD), priced
+            in US dollars. They trade every day, including weekends.
+          </li>
+        </ul>
+      </div>
+
+      <ul class="glossary">
+        <li>
+          <h3>Return</h3>
+          <p>
+            How much an investment gained or lost, as a percentage. +25% means that 100 dollars
+            became 125. Dividends are included, as if they had been reinvested.
+          </p>
+        </li>
+        <li>
+          <h3>Volatility</h3>
+          <p>
+            How much the price jumps around from one day to the next, scaled to a full year.
+            Higher volatility means a bumpier ride and a wider range of possible outcomes. It
+            says nothing about whether the price went up or down.
+          </p>
+        </li>
+        <li>
+          <h3>Drawdown</h3>
+          <p>
+            The fall from the highest price reached so far to a later low. The maximum drawdown
+            is the worst of these falls: what someone who bought at the top would have lost at
+            the worst moment.
+          </p>
+        </li>
+        <li>
+          <h3>Correlation</h3>
+          <p>
+            Whether two assets tend to rise and fall on the same days. It goes from −1 (always
+            opposite) through 0 (unrelated) to +1 (always together).
+          </p>
+        </li>
+      </ul>
+
+      <p class="note">
+        Use the buttons below to choose a period and to hide or show assets. Every chart and
+        every summary underneath it updates with your selection.
+      </p>
+    </section>
+
     <div class="controls" aria-label="Filters">
       <div class="segmented" id="period-control" role="group" aria-label="Period"></div>
       <div class="asset-toggles" id="asset-control" role="group" aria-label="Assets"></div>
@@ -33,14 +99,24 @@
         </p>
         <div class="panel">
           <div class="chart" id="cumulative-chart"></div>
+          <div class="guide">
+            <p>
+              <strong>How to read it.</strong> Each line answers the question “if I had
+              invested at the start of the period, how much would I have gained or lost by this
+              date?”. A line at +50% means 100 dollars had become 150; a line at −20% means it
+              had shrunk to 80. Lines above the neutral S&amp;P 500 line did better than
+              the market. Hover over or tap the chart to read the values on any date.
+            </p>
+            <p class="insight" id="performance-insight" aria-live="polite"></p>
+          </div>
         </div>
       </section>
 
       <section id="risk" aria-labelledby="risk-title">
         <h2 id="risk-title">Risk</h2>
         <p class="section-intro">
-          Volatility is the annualised standard deviation of daily returns: multiplied by √252
-          for equities and the index, and by √365 for crypto, which trades every day.
+          Return is only half of the picture: two assets can end the period at the same place
+          after very different journeys. Risk measures how rough that journey was.
         </p>
 
         <div class="panel">
@@ -55,6 +131,22 @@
             </div>
           </div>
           <div class="chart" id="volatility-chart"></div>
+          <div class="guide">
+            <p>
+              <strong>How to read it.</strong> Each point measures how much the price moved
+              during the previous 20 (or 60) trading days, expressed per year. As a rough guide,
+              a volatility of 20% means that a typical year ends within about 20% above or below
+              the average outcome. When a line jumps, the market was going through a stressful
+              period, such as the start of the pandemic in March 2020 (choose “Since 2018” to
+              see it). The 20-day window reacts quickly; the 60-day window is smoother.
+            </p>
+            <p class="detail">
+              Technically, it is the standard deviation of daily returns, multiplied by √252
+              for equities and the index (trading days per year) and by √365 for crypto, which
+              trades every day.
+            </p>
+            <p class="insight" id="volatility-insight" aria-live="polite"></p>
+          </div>
         </div>
 
         <div class="grid-2 panel-row">
@@ -66,6 +158,16 @@
               </div>
             </div>
             <div class="bars" id="drawdown-bars"></div>
+            <div class="guide">
+              <p>
+                <strong>How to read it.</strong> The longer the bar, the deeper the worst fall.
+                −30% means that, at the worst moment, 100 dollars invested at the peak were
+                worth 70. Losses are harder to undo than they look: after a 50% fall, the price
+                has to double just to get back to where it was. Hover over a bar to see the
+                dates of the peak and the low.
+              </p>
+              <p class="insight" id="drawdown-insight" aria-live="polite"></p>
+            </div>
           </div>
           <div class="panel">
             <div class="panel-header">
@@ -75,6 +177,16 @@
               </div>
             </div>
             <div class="chart" id="risk-scatter"></div>
+            <div class="guide">
+              <p>
+                <strong>How to read it.</strong> Each dot is one asset. Further right means a
+                bumpier ride; higher up means a better yearly return. Dots towards the top left
+                earned more for each unit of risk taken. An index spread over 500 companies
+                usually sits furthest to the left, because the ups and downs of single companies
+                partly cancel out.
+              </p>
+              <p class="insight" id="scatter-insight" aria-live="polite"></p>
+            </div>
           </div>
         </div>
 
@@ -96,6 +208,19 @@
               <tbody></tbody>
             </table>
           </div>
+          <dl class="column-guide">
+            <dt>Total return</dt>
+            <dd>Gain or loss over the whole period.</dd>
+            <dt>Annualised return</dt>
+            <dd>
+              The steady yearly rate that would give the same total return. Over periods of
+              less than a year it is an extrapolation and should be read with care.
+            </dd>
+            <dt>Volatility</dt>
+            <dd>Annualised volatility over the whole period.</dd>
+            <dt>Max drawdown, peak, trough</dt>
+            <dd>The worst fall, the date of the high before it and the date of the low.</dd>
+          </dl>
         </div>
       </section>
 
@@ -111,6 +236,22 @@
           </div>
           <div class="legend-scale" aria-hidden="true">
             <span>−1</span><span class="legend-gradient"></span><span>+1</span>
+          </div>
+          <div class="guide">
+            <p>
+              <strong>How to read it.</strong> Find one asset in the rows and another in the
+              columns: the cell where they meet says how closely their daily movements are
+              linked. Blue cells move together, pink cells tend to move in opposite directions,
+              and pale cells are largely unrelated. The diagonal is always 1, because every
+              asset moves exactly with itself.
+            </p>
+            <p>
+              <strong>Why it matters.</strong> Combining assets that do not move together makes
+              a portfolio's ups and downs smaller, because a fall in one is often offset by
+              another. This is the idea behind diversification. Correlation measures how often
+              assets move together, not how much they gain.
+            </p>
+            <p class="insight" id="correlation-insight" aria-live="polite"></p>
           </div>
         </div>
       </section>
@@ -158,7 +299,10 @@
         Only derived metrics are published, not raw prices. Data is end-of-day and historical,
         never real-time.
       </p>
-      <p>This is a portfolio project, not investment advice.</p>
+      <p>
+        Past performance does not indicate future results. This is a portfolio project, not
+        investment advice.
+      </p>
     </footer>
   </div>
 
