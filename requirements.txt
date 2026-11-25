@@ -3,4 +3,6 @@
 pandas==3.1.1
 yfinance==1.8.0
 streamlit==1.67.0
+# Charts in the dashboard; also a Streamlit dependency, pinned because it is imported directly.
+altair==6.3.0
 pytest==9.2.0
