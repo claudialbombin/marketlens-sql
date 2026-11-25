@@ -4,7 +4,7 @@ SQL-based market data pipeline: API ingestion, relational storage, and quantitat
 
 ## Project status
 
-Early development. The database, data ingestion, analytical SQL and Streamlit dashboard are in place; the static showcase is next.
+The database, data ingestion, analytical SQL, Streamlit dashboard and static showcase are in place.
 
 The pipeline is being built in stages:
 
@@ -13,7 +13,7 @@ The pipeline is being built in stages:
 3. Historical market data ingestion *(done)*
 4. Analytical SQL: returns, volatility, correlations and drawdowns *(done)*
 5. Streamlit dashboard *(done)*
-6. Static showcase on GitHub Pages
+6. Static showcase on GitHub Pages *(done)*
 
 Each section of this README is added when the corresponding component exists.
 
@@ -110,6 +110,24 @@ The dashboard reads directly from the SQLite database and runs the SQL files in 
 - **Performance:** cumulative returns compared across assets, and quoted or adjusted price history.
 - **Risk:** rolling volatility (20 or 60 observations), maximum drawdown, and annualised return against volatility.
 - **Correlation:** heatmap and pair table, computed on common trading dates.
+
+## Static showcase
+
+A read-only summary of the results is published with GitHub Pages: **https://claudialbombin.github.io/marketlens-sql/**
+
+GitHub Pages can only serve static files, so the page works on a snapshot:
+
+1. `python -m scripts.export_site_data` runs the SQL queries and writes JSON files to `site/data/` (one per period: 1 year, 3 years, since 2018).
+2. The JSON files are committed. The page shows the snapshot date.
+3. `.github/workflows/pages.yml` publishes the `site/` folder whenever it changes on `main`.
+
+The page is plain HTML, CSS and JavaScript with hand-drawn SVG charts; there is no build step. Only derived metrics are exported, never raw prices.
+
+To preview it locally:
+
+```bash
+python -m http.server -d site
+```
 
 ## Running the tests
 
