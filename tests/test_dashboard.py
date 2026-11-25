@@ -63,6 +63,16 @@ def test_dashboard_renders_all_sections(database):
     assert len(app.metric) == 3
 
 
+def test_charts_have_reading_guides_and_summaries(database):
+    app = run_app()
+
+    labels = [expander.label for expander in app.expander]
+    assert "New to finance? Start here" in labels
+    assert labels.count("How to read this chart") == 6
+    summaries = [text.value for text in app.markdown if text.value.startswith("**In this period:**")]
+    assert len(summaries) == 5
+
+
 def test_correlation_needs_two_assets(database):
     app = run_app()
     app.sidebar.multiselect[1].set_value(["AAPL"]).run()
