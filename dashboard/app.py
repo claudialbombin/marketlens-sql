@@ -5,7 +5,8 @@ Run from the project root:
 
 Every number shown here comes from the SQL files in database/queries/,
 executed through analysis.metrics. The dashboard only filters, reshapes and
-plots those results.
+plots those results. The plain-language summaries under each chart only pick
+out the highest and lowest of those values.
 """
 
 import datetime as dt
@@ -27,6 +28,28 @@ from config import settings  # noqa: E402
 from database.connection import get_connection  # noqa: E402
 
 DEFAULT_LOOKBACK_DAYS = 365
+
+GLOSSARY = """
+**Return**: how much an investment gained or lost, as a percentage. +25% means that
+100 dollars became 125. Prices are adjusted for dividends and splits, so dividends are
+counted as if they had been reinvested.
+
+**Volatility**: how much the price jumps around from one day to the next, scaled to a
+full year. Higher volatility means a bumpier ride and a wider range of possible outcomes.
+It says nothing about whether the price went up or down.
+
+**Drawdown**: the fall from the highest price reached so far to a later low. The
+maximum drawdown is the worst of these falls: what someone who bought at the top would
+have lost at the worst moment.
+
+**Correlation**: whether two assets tend to rise and fall on the same days, from −1
+(always opposite) through 0 (unrelated) to +1 (always together).
+
+**The assets**: the S&P 500 is an index of the 500 largest US companies and acts as the
+benchmark for "the market". Apple (technology), JPMorgan Chase (banking), Exxon Mobil
+(oil and gas) and Johnson & Johnson (healthcare) are single companies from different
+sectors. Bitcoin and Ether are cryptocurrencies, which trade every day including weekends.
+"""
 
 
 @st.cache_data(ttl="10m", show_spinner=False)
@@ -109,8 +132,46 @@ def line_chart(data: pd.DataFrame, value: str, title: str, percent: bool) -> alt
     )
 
 
+def explain(how_to_read: str, summary: str | None = None) -> None:
+    """Show a collapsible reading guide and, when available, a data summary."""
+    with st.expander("How to read this chart"):
+        st.markdown(how_to_read)
+    if summary:
+        st.markdown(f"**In this period:** {summary}")
+
+
+def describe_extremes(data: pd.DataFrame, column: str, fmt: str) -> tuple[str, str] | None:
+    """Return 'TICKER (value)' for the highest and lowest value of a column."""
+    valid = data.dropna(subset=[column])
+    if len(valid) < 2:
+        return None
+    highest = valid.loc[valid[column].idxmax()]
+    lowest = valid.loc[valid[column].idxmin()]
+    return (
+        f"{highest['ticker']} ({highest[column]:{fmt}})",
+        f"{lowest['ticker']} ({lowest[column]:{fmt}})",
+    )
+
+
+def correlation_strength(value: float) -> str:
+    """Describe a correlation coefficient in words."""
+    size = abs(value)
+    if size < 0.2:
+        return "were almost unrelated"
+    degree = "weakly" if size < 0.5 else "clearly" if size < 0.75 else "very closely"
+    return f"moved {degree} together" if value > 0 else f"moved {degree} in opposite directions"
+
+
 def show_overview(overview: pd.DataFrame, tickers: list[str], end_date: dt.date) -> None:
     """Market overview: asset list, coverage and latest prices."""
+    with st.expander("New to finance? Start here", expanded=True):
+        st.markdown(GLOSSARY)
+        st.markdown(
+            "Use the filters in the sidebar to choose assets and a period. Every tab "
+            "recalculates its figures for your selection, and each chart has a "
+            "*How to read this chart* note."
+        )
+
     st.subheader("Latest available prices")
     st.caption(
         f"Last observation on or before {end_date:%d %b %Y}. "
@@ -126,6 +187,10 @@ def show_overview(overview: pd.DataFrame, tickers: list[str], end_date: dt.date)
             value=f"{row.latest_close:,.2f} {row.currency}",
             delta=None if pd.isna(change) else f"{change:.2%}",
         )
+    st.caption(
+        "The small coloured figure is the change from the previous trading session: "
+        "green for a rise, red for a fall."
+    )
 
     st.subheader("Assets")
     st.dataframe(
@@ -143,7 +208,9 @@ def show_overview(overview: pd.DataFrame, tickers: list[str], end_date: dt.date)
             "exchange": "Exchange",
             "first_date": "First date",
             "last_date": "Last date",
-            "observations": "Observations",
+            "observations": st.column_config.NumberColumn(
+                "Observations", help="Number of daily prices stored for the asset."
+            ),
         },
     )
 
@@ -162,6 +229,16 @@ def show_performance(tickers: list[str], start: str, end: str) -> None:
         line_chart(cumulative, "cumulative_return", "Cumulative return", percent=True),
         width="stretch",
     )
+    final = cumulative.sort_values("date").groupby("ticker", as_index=False).last()
+    extremes = describe_extremes(final, "cumulative_return", "+.1%")
+    explain(
+        "Each line answers the question *if I had invested at the start of the period, how "
+        "much would I have gained or lost by this date?* A line at +50% means 100 dollars "
+        "had become 150; a line at −20% means they had shrunk to 80. Lines above the "
+        "S&P 500 did better than the market over the same days. Hover over the chart to "
+        "read exact values.",
+        f"{extremes[0]} did best and {extremes[1]} did worst." if extremes else None,
+    )
 
     st.subheader("Price history")
     prices = load("price_history", start, end)
@@ -173,6 +250,13 @@ def show_performance(tickers: list[str], start: str, end: str) -> None:
     st.altair_chart(
         line_chart(prices[prices["ticker"] == ticker], column, price_type or "Adjusted close", percent=False),
         width="stretch",
+    )
+    explain(
+        "This is the price itself rather than the percentage change. **Adjusted close** "
+        "corrects past prices for dividends and stock splits, so that the line reflects what "
+        "an investor actually earned; it is the price used in every calculation. **Close** "
+        "is the price that was actually quoted on each day. The two differ most for "
+        "companies that pay large dividends, such as XOM or JNJ."
     )
 
 
@@ -192,6 +276,18 @@ def show_risk(tickers: list[str], start: str, end: str) -> None:
     st.altair_chart(
         line_chart(volatility, column, "Annualised volatility", percent=True),
         width="stretch",
+    )
+    latest = volatility.sort_values("date").groupby("ticker", as_index=False).last()
+    extremes = describe_extremes(latest, column, ".1%")
+    explain(
+        "Each point measures how much the price moved during the previous 20 (or 60) "
+        "trading days, expressed per year. As a rough guide, a volatility of 20% means "
+        "that a typical year ends within about 20% above or below the average outcome. "
+        "When a line jumps, the market was going through a stressful period, such as the "
+        "start of the pandemic in March 2020. The 20-observation window reacts quickly; "
+        "the 60-observation window is smoother. The line starts once the window is full.",
+        f"at the end of the period, {extremes[0]} was the most volatile and "
+        f"{extremes[1]} the calmest." if extremes else None,
     )
 
     profile = load("risk_profile", start, end).merge(
@@ -220,6 +316,14 @@ def show_risk(tickers: list[str], start: str, end: str) -> None:
             .properties(height=300)
         )
         st.altair_chart(bars, width="stretch")
+        worst = describe_extremes(profile, "maximum_drawdown", ".1%")
+        explain(
+            "The longer the bar, the deeper the worst fall. −30% means that, at the worst "
+            "moment, 100 dollars invested at the peak were worth 70. Losses are harder to "
+            "undo than they look: after a 50% fall the price has to double to recover. "
+            "Hover over a bar to see the dates of the peak and the low.",
+            f"the deepest fall was {worst[1]} and the mildest {worst[0]}." if worst else None,
+        )
 
     with right:
         st.subheader("Risk and return")
@@ -240,6 +344,16 @@ def show_risk(tickers: list[str], start: str, end: str) -> None:
         )
         labels = points.mark_text(align="left", dx=9).encode(text="ticker:N")
         st.altair_chart((points + labels).properties(height=300), width="stretch")
+        returns = describe_extremes(profile, "annualised_return", "+.1%")
+        risk = describe_extremes(profile, "annualised_volatility", ".1%")
+        explain(
+            "Each dot is one asset. Further right means a bumpier ride; higher up means a "
+            "better yearly return. Dots towards the top left earned more for each unit of "
+            "risk taken. An index spread over 500 companies usually sits furthest to the "
+            "left, because the ups and downs of single companies partly cancel out.",
+            f"highest yearly return: {returns[0]}; lowest volatility: {risk[1]}."
+            if returns and risk else None,
+        )
 
     st.dataframe(
         profile[
@@ -250,13 +364,28 @@ def show_risk(tickers: list[str], start: str, end: str) -> None:
         width="stretch",
         column_config={
             "ticker": "Ticker",
-            "observations": "Returns",
-            "total_return": st.column_config.NumberColumn("Total return", format="percent"),
-            "annualised_return": st.column_config.NumberColumn("Annualised return", format="percent"),
-            "annualised_volatility": st.column_config.NumberColumn("Annualised volatility", format="percent"),
-            "maximum_drawdown": st.column_config.NumberColumn("Max drawdown", format="percent"),
-            "peak_date": "Peak",
-            "trough_date": "Trough",
+            "observations": st.column_config.NumberColumn(
+                "Returns", help="Number of daily returns in the period."
+            ),
+            "total_return": st.column_config.NumberColumn(
+                "Total return", format="percent", help="Gain or loss over the whole period."
+            ),
+            "annualised_return": st.column_config.NumberColumn(
+                "Annualised return",
+                format="percent",
+                help="The steady yearly rate that would give the same total return. "
+                "Over periods shorter than a year it is an extrapolation.",
+            ),
+            "annualised_volatility": st.column_config.NumberColumn(
+                "Annualised volatility",
+                format="percent",
+                help="Volatility of daily returns over the whole period, scaled to a year.",
+            ),
+            "maximum_drawdown": st.column_config.NumberColumn(
+                "Max drawdown", format="percent", help="Worst fall from a previous high."
+            ),
+            "peak_date": st.column_config.TextColumn("Peak", help="Date of the high before the worst fall."),
+            "trough_date": st.column_config.TextColumn("Trough", help="Date of the lowest point of that fall."),
         },
     )
 
@@ -304,6 +433,32 @@ def show_correlation(tickers: list[str], start: str, end: str) -> None:
         ),
     )
     st.altair_chart((heatmap + values).properties(height=420), width="stretch")
+    valid = pairs.dropna(subset=["correlation"])
+    summary = None
+    if not valid.empty:
+        strongest = valid.loc[valid["correlation"].idxmax()]
+        weakest = valid.loc[valid["correlation"].idxmin()]
+        summary = (
+            f"{strongest['ticker_x']} and {strongest['ticker_y']} "
+            f"{correlation_strength(strongest['correlation'])} ({strongest['correlation']:.2f})"
+        )
+        if len(valid) > 1:
+            summary += (
+                f"; at the other end, {weakest['ticker_x']} and {weakest['ticker_y']} "
+                f"{correlation_strength(weakest['correlation'])} ({weakest['correlation']:.2f})"
+            )
+        summary += "."
+    explain(
+        "Find one asset on each axis: the cell where they meet says how closely their daily "
+        "movements are linked. Blue cells move together, red cells tend to move in opposite "
+        "directions, and pale cells are largely unrelated. The diagonal is always 1, because "
+        "every asset moves exactly with itself.\n\n"
+        "**Why it matters:** combining assets that do not move together makes a portfolio's "
+        "ups and downs smaller, because a fall in one is often offset by another. This is the "
+        "idea behind diversification. Correlation measures how often assets move together, "
+        "not how much they gain.",
+        summary,
+    )
 
     st.dataframe(
         pairs.sort_values("correlation", ascending=False),
@@ -312,8 +467,12 @@ def show_correlation(tickers: list[str], start: str, end: str) -> None:
         column_config={
             "ticker_x": "Asset 1",
             "ticker_y": "Asset 2",
-            "observations": "Paired returns",
-            "correlation": st.column_config.NumberColumn("Correlation", format="%.3f"),
+            "observations": st.column_config.NumberColumn(
+                "Paired returns", help="Number of dates on which both assets traded."
+            ),
+            "correlation": st.column_config.NumberColumn(
+                "Correlation", format="%.3f", help="From −1 (opposite) to +1 (together)."
+            ),
         },
     )
 
@@ -323,8 +482,8 @@ def main() -> None:
     st.set_page_config(page_title="marketlens-sql", layout="wide")
     st.title("marketlens-sql")
     st.caption(
-        "Historical market data analysed with SQL. Educational project, "
-        "not investment advice."
+        "Historical market data analysed with SQL. Past performance does not indicate "
+        "future results. Educational project, not investment advice."
     )
 
     if not settings.DATABASE_PATH.exists():
