@@ -4,18 +4,19 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from config import settings
+
 logger = logging.getLogger(__name__)
 
 DATABASE_DIR = Path(__file__).resolve().parent
 SCHEMA_PATH = DATABASE_DIR / "schema.sql"
 SEED_ASSETS_PATH = DATABASE_DIR / "seed_assets.sql"
-DEFAULT_DATABASE_PATH = DATABASE_DIR.parent / "data" / "marketlens.db"
 
 # STRICT tables need 3.37; SQRT() for volatility needs 3.35.
 MINIMUM_SQLITE_VERSION = (3, 37, 0)
 
 
-def get_connection(database_path: Path = DEFAULT_DATABASE_PATH) -> sqlite3.Connection:
+def get_connection(database_path: Path = settings.DATABASE_PATH) -> sqlite3.Connection:
     """Open a SQLite connection with foreign key enforcement enabled.
 
     Args:
