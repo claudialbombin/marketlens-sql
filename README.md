@@ -4,7 +4,7 @@ SQL-based market data pipeline: API ingestion, relational storage, and quantitat
 
 ## Project status
 
-Early development. The database, data ingestion and analytical SQL layers are in place; the dashboard is next.
+Early development. The database, data ingestion, analytical SQL and Streamlit dashboard are in place; the static showcase is next.
 
 The pipeline is being built in stages:
 
@@ -12,7 +12,7 @@ The pipeline is being built in stages:
 2. Relational database schema (SQLite) *(done)*
 3. Historical market data ingestion *(done)*
 4. Analytical SQL: returns, volatility, correlations and drawdowns *(done)*
-5. Streamlit dashboard
+5. Streamlit dashboard *(done)*
 6. Static showcase on GitHub Pages
 
 Each section of this README is added when the corresponding component exists.
@@ -96,6 +96,20 @@ XOM      -0.160534296596031  2025-04-01  2025-04-10
 ```
 
 From Python, [`analysis/metrics.py`](analysis/metrics.py) runs the same files and returns pandas DataFrames.
+
+## Dashboard
+
+```bash
+streamlit run dashboard/app.py
+```
+
+The dashboard reads directly from the SQLite database and runs the SQL files in `database/queries/`; it does not recalculate any metric in pandas. Run `python -m ingestion.update_database` first.
+
+- **Filters:** asset type, assets and date range (the last year by default).
+- **Overview:** latest available close and daily change per asset, and data coverage.
+- **Performance:** cumulative returns compared across assets, and quoted or adjusted price history.
+- **Risk:** rolling volatility (20 or 60 observations), maximum drawdown, and annualised return against volatility.
+- **Correlation:** heatmap and pair table, computed on common trading dates.
 
 ## Running the tests
 
