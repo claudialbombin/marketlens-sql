@@ -4,14 +4,14 @@ SQL-based market data pipeline: API ingestion, relational storage, and quantitat
 
 ## Project status
 
-Early development. The project setup, the SQLite database layer and the data ingestion pipeline are in place; analytical SQL is next.
+Early development. The database, data ingestion and analytical SQL layers are in place; the dashboard is next.
 
 The pipeline is being built in stages:
 
 1. Project foundation *(done)*
 2. Relational database schema (SQLite) *(done)*
 3. Historical market data ingestion *(done)*
-4. Analytical SQL: returns, volatility, correlations and drawdowns
+4. Analytical SQL: returns, volatility, correlations and drawdowns *(done)*
 5. Streamlit dashboard
 6. Static showcase on GitHub Pages
 
@@ -62,6 +62,40 @@ This creates the database if needed and brings every asset up to date. It can be
 - **Errors:** network errors and rate limits are retried with exponential backoff. If one asset fails, the others are still updated and the command exits with a non-zero status.
 
 Optional settings (database path, log level) can be overridden with the environment variables listed in [`.env.example`](.env.example). No API key is required.
+
+## Analytical SQL
+
+All metrics are calculated in SQL at query time, using window functions and CTEs. Each file in [`database/queries/`](database/queries/) takes a `:start_date` and `:end_date` parameter:
+
+| Query | Metric |
+|---|---|
+| [`daily_returns.sql`](database/queries/daily_returns.sql) | $R_t = P_t / P_{t-1} - 1$ using `LAG()` |
+| [`cumulative_returns.sql`](database/queries/cumulative_returns.sql) | Return since the start of the period, using `FIRST_VALUE()` |
+| [`rolling_volatility.sql`](database/queries/rolling_volatility.sql) | Annualised 20- and 60-observation volatility (252 days for equities, 365 for crypto) |
+| [`correlations.sql`](database/queries/correlations.sql) | Pearson correlation for every pair of assets, on common trading dates |
+| [`maximum_drawdown.sql`](database/queries/maximum_drawdown.sql) | Largest peak-to-trough decline, with peak and trough dates |
+
+SQLite has no `STDDEV` or `CORR` functions, so both are implemented explicitly from sums; the results are validated against pandas in the tests. Formulas, assumptions and the handling of different trading calendars are explained in [`docs/methodology.md`](docs/methodology.md).
+
+Example: the maximum drawdown in 2025, run directly with the `sqlite3` CLI.
+
+```text
+$ sqlite3 -header -column data/marketlens.db
+sqlite> .parameter set :start_date "'2025-01-01'"
+sqlite> .parameter set :end_date "'2025-12-31'"
+sqlite> .read database/queries/maximum_drawdown.sql
+ticker   maximum_drawdown    peak_date   trough_date
+-------  ------------------  ----------  -----------
+AAPL     -0.302225803703724  2025-02-24  2025-04-08
+BTC-USD  -0.321469804846144  2025-10-06  2025-11-22
+ETH-USD  -0.600783880546594  2025-01-06  2025-04-08
+JNJ      -0.127250962626998  2025-03-10  2025-05-14
+JPM      -0.24423922585472   2025-02-18  2025-04-04
+XOM      -0.160534296596031  2025-04-01  2025-04-10
+^GSPC    -0.18902206184284   2025-02-19  2025-04-08
+```
+
+From Python, [`analysis/metrics.py`](analysis/metrics.py) runs the same files and returns pandas DataFrames.
 
 ## Running the tests
 
