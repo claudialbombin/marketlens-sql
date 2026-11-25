@@ -99,6 +99,29 @@ $$
 - The query also returns the peak date (the last date the price was at its running maximum) and the trough date.
 - If the same drawdown occurs twice, the earliest trough is reported. An asset that only rises has a maximum drawdown of 0.
 
+## Risk profile
+
+File: [`risk_profile.sql`](../database/queries/risk_profile.sql)
+
+One row per asset summarising the whole period, used to compare assets in the dashboard and the showcase:
+
+$$
+TR = \frac{P_{\text{last}}}{P_{\text{first}}} - 1
+\qquad
+AR = (1 + TR)^{N / n} - 1
+\qquad
+\sigma_{\text{annual}} = s \sqrt{N}
+$$
+
+$n$ is the number of daily returns in the period, $s$ their sample standard deviation and $N$ the observations per year (252 or 365, as for rolling volatility). Annualising by the number of observations, rather than by calendar time, keeps equities and crypto on the same footing.
+
+Returns are computed only from prices inside the period, so the first day has no return, which is consistent with cumulative returns starting at 0. Annualised returns over short periods extrapolate a few weeks of performance to a full year and should be read with care.
+
+## Dashboard support queries
+
+- [`asset_overview.sql`](../database/queries/asset_overview.sql): asset metadata, data coverage and the latest close on or before the end date. The change shown is between the last two observations, so it refers to the last trading session even when the end date is a weekend.
+- [`price_history.sql`](../database/queries/price_history.sql): quoted and adjusted closes for the price chart. Only the adjusted close is used in calculations.
+
 ## Validation
 
 `tests/test_metrics.py` checks every query on small datasets:
