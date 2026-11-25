@@ -170,7 +170,7 @@ conda-meta/
 .ropeproject
 
 # mkdocs/Zensical documentation
-/site
+# /site is intentionally not ignored: it holds the GitHub Pages showcase.
 
 # mypy
 .mypy_cache/
@@ -221,3 +221,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# marketlens-sql: local database and generated data
+# The SQLite database is rebuilt from schema.sql and the ingestion pipeline,
+# so it is never versioned. data/.gitkeep keeps the folder in the repository.
+data/*
+!data/.gitkeep
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# macOS
+.DS_Store
