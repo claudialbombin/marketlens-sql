@@ -250,3 +250,37 @@ def test_rising_prices_have_zero_drawdown(connection):
     drawdown = metrics.load_maximum_drawdown(connection, *FULL_RANGE)
 
     assert drawdown.loc[0, "maximum_drawdown"] == pytest.approx(0.0)
+
+
+# --- dashboard support queries -------------------------------------------
+
+
+@pytest.mark.parametrize("ticker, periods_per_year", [("AAPL", 252), ("BTC-USD", 365)])
+def test_risk_profile_matches_pandas(connection, ticker, periods_per_year):
+    prices = random_walk(pd.date_range("2024-01-01", periods=100), seed=11)
+    insert_series(connection, ticker, prices)
+
+    profile = metrics.run_query(connection, "risk_profile", *FULL_RANGE).iloc[0]
+    returns = prices.pct_change().dropna()
+    total_return = prices.iloc[-1] / prices.iloc[0] - 1
+
+    assert profile["observations"] == len(returns)
+    assert profile["total_return"] == pytest.approx(total_return)
+    assert profile["annualised_return"] == pytest.approx(
+        (1 + total_return) ** (periods_per_year / len(returns)) - 1
+    )
+    assert profile["annualised_volatility"] == pytest.approx(returns.std() * np.sqrt(periods_per_year))
+
+
+def test_asset_overview_uses_last_price_on_or_before_end_date(connection):
+    dates = ["2024-01-04", "2024-01-05", "2024-01-08"]
+    insert_series(connection, "AAPL", pd.Series([100.0, 102.0, 110.0], index=dates))
+
+    # 2024-01-06 is a Saturday: the latest observation is Friday 2024-01-05.
+    overview = metrics.run_query(connection, "asset_overview", "2024-01-01", "2024-01-06")
+    aapl = overview.set_index("ticker").loc["AAPL"]
+
+    assert aapl["latest_date"] == "2024-01-05"
+    assert aapl["latest_daily_change"] == pytest.approx(0.02)
+    assert aapl["last_date"] == "2024-01-08"
+    assert pd.isna(overview.set_index("ticker").loc["JPM", "latest_date"])
