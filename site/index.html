@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>marketlens-sql</title>
+  <meta name="description" content="Returns, volatility, drawdowns and correlations of seven assets, calculated with SQL window functions on a SQLite database.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="page">
+    <header class="intro">
+      <p class="eyebrow">SQL market data pipeline</p>
+      <h1>marketlens-sql</h1>
+      <p class="lead">
+        Daily prices for an index, four equities and two cryptocurrencies, stored in SQLite.
+        Every figure on this page is calculated by SQL queries with window functions and CTEs.
+      </p>
+      <p class="meta-line" id="snapshot">Loading data…</p>
+    </header>
+
+    <div class="controls" aria-label="Filters">
+      <div class="segmented" id="period-control" role="group" aria-label="Period"></div>
+      <div class="asset-toggles" id="asset-control" role="group" aria-label="Assets"></div>
+    </div>
+
+    <main id="content">
+      <section id="performance" aria-labelledby="performance-title">
+        <h2 id="performance-title">Performance</h2>
+        <p class="section-intro">
+          Cumulative return since the start of the period, from closing prices adjusted for
+          splits and dividends. Each asset starts at 0%.
+        </p>
+        <div class="panel">
+          <div class="chart" id="cumulative-chart"></div>
+        </div>
+      </section>
+
+      <section id="risk" aria-labelledby="risk-title">
+        <h2 id="risk-title">Risk</h2>
+        <p class="section-intro">
+          Volatility is the annualised standard deviation of daily returns: multiplied by √252
+          for equities and the index, and by √365 for crypto, which trades every day.
+        </p>
+
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <h3>Rolling volatility</h3>
+              <p>Calculated over the last 20 or 60 observations.</p>
+            </div>
+            <div class="segmented" id="window-control" role="group" aria-label="Window">
+              <button type="button" data-window="volatility_20d" aria-pressed="true">20 days</button>
+              <button type="button" data-window="volatility_60d" aria-pressed="false">60 days</button>
+            </div>
+          </div>
+          <div class="chart" id="volatility-chart"></div>
+        </div>
+
+        <div class="grid-2 panel-row">
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Maximum drawdown</h3>
+                <p>Largest fall from a previous peak within the period.</p>
+              </div>
+            </div>
+            <div class="bars" id="drawdown-bars"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Return and volatility</h3>
+                <p>Annualised over the period.</p>
+              </div>
+            </div>
+            <div class="chart" id="risk-scatter"></div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="table-wrap">
+            <table id="risk-table">
+              <caption class="visually-hidden">Risk and return by asset</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Asset</th>
+                  <th scope="col">Total return</th>
+                  <th scope="col">Annualised return</th>
+                  <th scope="col">Volatility</th>
+                  <th scope="col">Max drawdown</th>
+                  <th scope="col">Peak</th>
+                  <th scope="col">Trough</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="correlation" aria-labelledby="correlation-title">
+        <h2 id="correlation-title">Correlation</h2>
+        <p class="section-intro">
+          Pearson correlation of returns. Each pair uses only the dates on which both assets
+          traded, so a crypto weekend move is compared with the equity return over the same days.
+        </p>
+        <div class="panel">
+          <div class="table-wrap">
+            <table class="matrix" id="correlation-matrix"></table>
+          </div>
+          <div class="legend-scale" aria-hidden="true">
+            <span>−1</span><span class="legend-gradient"></span><span>+1</span>
+          </div>
+        </div>
+      </section>
+
+      <section id="method" aria-labelledby="method-title">
+        <h2 id="method-title">How it works</h2>
+        <p class="section-intro">
+          Data is downloaded with yfinance, validated and stored in two tables. No metric is
+          stored: each one is a SQL query run on demand.
+        </p>
+        <ul class="facts">
+          <li>
+            <h3>Ingestion</h3>
+            <p>
+              Incremental daily updates. The last stored days are re-downloaded and compared,
+              so a dividend that changes past adjusted prices triggers a full reload.
+            </p>
+          </li>
+          <li>
+            <h3>Storage</h3>
+            <p>
+              SQLite with strict types, a composite <code>(asset_id, date)</code> key and
+              CHECK constraints that reject inconsistent prices.
+            </p>
+          </li>
+          <li>
+            <h3>Analytics</h3>
+            <p>
+              <code>LAG</code>, <code>FIRST_VALUE</code> and rolling window sums. SQLite has no
+              <code>STDDEV</code> or <code>CORR</code>, so both are written out and tested
+              against pandas.
+            </p>
+          </li>
+        </ul>
+        <p class="note">
+          Source code, SQL files and methodology:
+          <a href="https://github.com/claudialbombin/marketlens-sql">github.com/claudialbombin/marketlens-sql</a>
+        </p>
+      </section>
+    </main>
+
+    <footer>
+      <p>
+        Market data from Yahoo Finance via yfinance, used for research and educational purposes.
+        Only derived metrics are published, not raw prices. Data is end-of-day and historical,
+        never real-time.
+      </p>
+      <p>This is a portfolio project, not investment advice.</p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
