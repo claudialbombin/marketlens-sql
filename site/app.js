@@ -1,7 +1,8 @@
 // marketlens-sql showcase.
 // Reads the JSON snapshot produced by scripts/export_site_data.py and draws
-// every chart as plain SVG or HTML. No calculations happen here: all values
-// come from the SQL queries.
+// every chart as plain SVG or HTML. No metric is calculated here: all values
+// come from the SQL queries. The plain-language summaries under each chart
+// only pick out the highest and lowest of those values.
 
 "use strict";
 
@@ -465,6 +466,137 @@ function drawCorrelationMatrix(table, pairs) {
   table.append(head, body);
 }
 
+// Plain-language summaries -------------------------------------------------
+
+function periodPhrase() {
+  const period = state.meta.periods.find((item) => item.key === state.periodKey);
+  // "1 year" reads better as "the last year".
+  return period.key === "max" ? "Since 2018" : `Over the last ${period.label.replace(/^1 /, "")}`;
+}
+
+function setInsight(id, text) {
+  document.getElementById(id).textContent = text;
+}
+
+function extremes(rows, key) {
+  const valid = rows.filter((row) => row[key] !== null && row[key] !== undefined);
+  if (valid.length === 0) return null;
+  const sorted = [...valid].sort((a, b) => b[key] - a[key]);
+  return { highest: sorted[0], lowest: sorted[sorted.length - 1], count: sorted.length };
+}
+
+function benchmarkTicker() {
+  const index = state.meta.assets.find((asset) => asset.asset_type === "index");
+  return index && !state.hidden.has(index.ticker) ? index.ticker : null;
+}
+
+function describePerformance(rows) {
+  const range = extremes(rows, "total_return");
+  if (!range || range.count < 2) return "";
+  const parts = [
+    `${periodPhrase()}, ${labelFor(range.highest.ticker)} did best `
+      + `(${formatPercent(range.highest.total_return)}) and ${labelFor(range.lowest.ticker)} `
+      + `did worst (${formatPercent(range.lowest.total_return)}).`,
+  ];
+  const benchmark = benchmarkTicker();
+  const benchmarkRow = rows.find((row) => row.ticker === benchmark);
+  if (benchmarkRow) {
+    const others = rows.filter((row) => row.ticker !== benchmark && row.total_return !== null);
+    const ahead = others.filter((row) => row.total_return > benchmarkRow.total_return).length;
+    parts.push(`The ${labelFor(benchmark)} returned ${formatPercent(benchmarkRow.total_return)}; `
+      + `${ahead} of the other ${others.length} assets beat it.`);
+  }
+  return parts.join(" ");
+}
+
+function describeVolatility(seriesByTicker) {
+  const latest = [];
+  for (const asset of visibleAssets()) {
+    const points = seriesByTicker[asset.ticker];
+    if (points && points.length) {
+      const [date, value] = points[points.length - 1];
+      latest.push({ ticker: asset.ticker, date, value });
+    }
+  }
+  const range = extremes(latest, "value");
+  if (!range) return "";
+  const parts = [
+    `On ${formatDate(range.highest.date)}, ${labelFor(range.highest.ticker)} was the most volatile `
+      + `(${formatPercentPlain(range.highest.value, 1)} a year)`,
+  ];
+  if (range.count > 1) {
+    parts[0] += ` and ${labelFor(range.lowest.ticker)} the calmest `
+      + `(${formatPercentPlain(range.lowest.value, 1)}).`;
+  } else {
+    parts[0] += ".";
+  }
+  const benchmark = benchmarkTicker();
+  const benchmarkPoints = benchmark ? seriesByTicker[benchmark] : null;
+  if (benchmarkPoints && benchmarkPoints.length) {
+    const peak = benchmarkPoints.reduce((best, point) => (point[1] > best[1] ? point : best));
+    parts.push(`In this period the ${labelFor(benchmark)}'s volatility was highest on ${formatDate(peak[0])}, `
+      + `at ${formatPercentPlain(peak[1], 1)}.`);
+  }
+  return parts.join(" ");
+}
+
+function describeDrawdowns(rows) {
+  const range = extremes(rows, "maximum_drawdown");
+  if (!range) return "";
+  const worst = range.lowest;
+  const parts = [
+    `${periodPhrase()}, the deepest fall was ${labelFor(worst.ticker)}'s `
+      + `${formatPercent(worst.maximum_drawdown)}, from ${formatDate(worst.peak_date)} `
+      + `to ${formatDate(worst.trough_date)}.`,
+  ];
+  if (range.count > 1) {
+    parts.push(`The mildest was ${labelFor(range.highest.ticker)}'s `
+      + `${formatPercent(range.highest.maximum_drawdown)}.`);
+  }
+  return parts.join(" ");
+}
+
+function describeRiskReturn(rows) {
+  const returns = extremes(rows, "annualised_return");
+  const volatility = extremes(rows, "annualised_volatility");
+  if (!returns || returns.count < 2) return "";
+  const best = returns.highest;
+  const calmest = volatility.lowest;
+  let text = `Highest yearly return: ${labelFor(best.ticker)} `
+    + `(${formatPercent(best.annualised_return)}, with ${formatPercentPlain(best.annualised_volatility, 1)} `
+    + `volatility). Lowest volatility: ${labelFor(calmest.ticker)} `
+    + `(${formatPercentPlain(calmest.annualised_volatility, 1)}).`;
+  if (best.ticker === calmest.ticker) {
+    text += " In this period the same asset had both, which is unusual.";
+  }
+  return text;
+}
+
+function correlationStrength(value) {
+  const size = Math.abs(value);
+  if (size < 0.2) return "were almost unrelated";
+  const degree = size < 0.5 ? "weakly" : size < 0.75 ? "clearly" : "very closely";
+  return value > 0 ? `moved ${degree} together` : `moved ${degree} in opposite directions`;
+}
+
+function describeCorrelations(pairs) {
+  const visible = new Set(visibleAssets().map((asset) => asset.ticker));
+  const shown = pairs.filter((pair) => visible.has(pair.ticker_x) && visible.has(pair.ticker_y));
+  const range = extremes(shown, "correlation");
+  if (!range) return "";
+  const names = (pair) => `${labelFor(pair.ticker_x)} and ${labelFor(pair.ticker_y)}`;
+  const value = (pair) => pair.correlation.toFixed(2);
+  const strongest = range.highest;
+  if (range.count === 1) {
+    return `${periodPhrase()}, ${names(strongest)} ${correlationStrength(strongest.correlation)} `
+      + `(${value(strongest)}).`;
+  }
+  const weakest = range.lowest;
+  return `${periodPhrase()}, the strongest link was between ${names(strongest)}, which `
+    + `${correlationStrength(strongest.correlation)} (${value(strongest)}). At the other end, `
+    + `${names(weakest)} ${correlationStrength(weakest.correlation)} (${value(weakest)}).`;
+}
+
 // Controls -----------------------------------------------------------------
 
 function statusMessage(text) {
@@ -553,6 +685,12 @@ function render() {
   drawScatter(document.getElementById("risk-scatter"), riskRows);
   drawRiskTable(document.getElementById("risk-table"), riskRows);
   drawCorrelationMatrix(document.getElementById("correlation-matrix"), period.correlations);
+
+  setInsight("performance-insight", describePerformance(riskRows));
+  setInsight("volatility-insight", describeVolatility(period[state.windowKey]));
+  setInsight("drawdown-insight", describeDrawdowns(riskRows));
+  setInsight("scatter-insight", describeRiskReturn(riskRows));
+  setInsight("correlation-insight", describeCorrelations(period.correlations));
 }
 
 async function loadJson(path) {
